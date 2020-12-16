@@ -19,12 +19,6 @@ const fs = require('fs')
 
 
 /* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-/* -------------------------------------------------------------------------- */
-
-
-
-/* -------------------------------------------------------------------------- */
 //             ######## DECLARE VARIABLES & CONFIGURATIONS ########
 /* -------------------------------------------------------------------------- */
 //#region
@@ -94,7 +88,38 @@ const app = express()
 /* -------------------------------------------------------------------------- */
 //#region
 
+// Boilerplate for making SQL queries
+const mkQuery = (SQL, POOL) => {
+    return async (PARAMS) => {
+        // get a connection from pool
+        const conn = await POOL.getConnection()
+        try {
+            // Execute the query
+            const results = await conn.query(SQL, PARAMS)
+            return results[0]
+        } catch (e) {
+            return Promise.reject(e)
+        } finally {
+            conn.release()
+        }
+    }
+}
 
+/* -------------------------------------------------------------------------- */
+
+//#endregion
+
+
+
+/* -------------------------------------------------------------------------- */
+//                        ######## SQL QUERIES ########
+/* -------------------------------------------------------------------------- */
+//#region
+
+const SQL_SELECT_WITH_ID = "SELECT gid,name,year,url,image FROM `game` WHERE gid = ?"
+
+// SQL STATEMENTS
+const QUERY_SELECT_WITH_ID = mkQuery(SQL_SELECT_WITH_ID, pool)
 
 //#endregion
 
@@ -116,6 +141,26 @@ app.use(morgan('combined'))
 
 // Apply cors headers to resp
 app.use(cors())
+
+
+
+// GET /game/:id 
+app.get('/game/:id', async (req, resp) => {
+    const id = req.params.id
+    const results = Object.assign({},(await QUERY_SELECT_WITH_ID(id))[0])
+    const reviews = await mongo.db(MONGO_DB).collection(MONGO_COLLECTION).aggregate([
+        {
+            $match : {name: results.name}
+        }
+        
+    ])
+    .limit(10)
+    .toArray()
+    results.reviews = reviews;
+    resp.type('application/json')
+    resp.status(200)
+    resp.json(results)
+})
 
 
 
